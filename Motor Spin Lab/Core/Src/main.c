@@ -75,6 +75,7 @@ int main(void)
 	uint8_t buff[8];
 	uint8_t buff1[12];
 	uint8_t buff2[24];
+	uint8_t buff3[24];
 	int val;
 	static int n;
 	static int m;
@@ -144,8 +145,6 @@ int main(void)
 	  HAL_UART_Receive(&huart2, (char*)buff, 4, HAL_MAX_DELAY);
 	  HAL_Delay(500);
 
-
-
 	  if(buff[2] > 47 && buff[2] < 58){
 
 		  val_ten = buff[2] - 48;
@@ -170,27 +169,29 @@ int main(void)
 
 	  }
 
-	  val = buff[2]*16 + buff[3];
+	  val = val_ten*16 + val_one;
 
-	  val = (65535*val)/255);
+	  int vals = (65535*2*val)/255 - 65535;
 
 	  if(buff[1]==50){
 
-
 		  enable(&motor2);
-		  set_level(&motor2, val);
+		  set_level(&motor2, vals);
 
+		  n = sprintf((char*)buff3,"Motor compare set to: %d\r\n",val);
+		  HAL_UART_Transmit(&huart2, buff3, strlen((char*)buff3), HAL_MAX_DELAY);
 
 	  }
 	  if(buff[1]==49){
 
-
 		  enable(&motor1);
-		  set_level(&motor1, val);
+		  set_level(&motor1, vals);
+
+		  n = sprintf((char*)buff3,"Motor compare set to: %d\r\n",val);
+		  HAL_UART_Transmit(&huart2, buff3, strlen((char*)buff3), HAL_MAX_DELAY);
 
 	  }
 
-	  HAL_UART_Transmit(&huart2, buff, strlen((char*)buff), HAL_MAX_DELAY);
 
     /* USER CODE END WHILE */
 
