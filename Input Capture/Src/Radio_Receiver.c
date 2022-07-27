@@ -13,7 +13,7 @@ void Initialize_Vals(Radio_t* rad){
 	rad->IC_Val1 = 0;
 	rad->IC_Val2 = 0;
 	rad->Is_First_Captured = 0;
-	rad->frequency = 0;
+	rad->usWidth = 0;
 
 }
 

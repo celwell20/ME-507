@@ -20,12 +20,12 @@ struct Radio{
 	uint32_t IC_Val2;
 	uint32_t Difference;
 	int Is_First_Captured;
-	/* Measure Frequency */
-	float frequency;
+	uint32_t usWidth;
+	int radio_upper;
+	int radio_lower;
 
 } typedef Radio_t;
 
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim);
 void Read_Start(Radio_t* rad);
 void Initialize_Vals(Radio_t* rad);
 

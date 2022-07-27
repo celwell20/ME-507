@@ -23,6 +23,9 @@
 /* USER CODE BEGIN Includes */
 #include "Motor_Driver.h"
 #include "Radio_Receiver.h"
+#include "stdio.h"
+#include "string.h"
+
 
 /* USER CODE END Includes */
 
@@ -44,18 +47,19 @@
  TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
 
-UART_HandleTypeDef huart2;
+UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-
+Radio_t rad1;
+Radio_t rad2;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM4_Init(void);
-static void MX_USART2_UART_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -73,14 +77,19 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
   uint8_t buff[200];
-  uint32_t IC_Val1 = 0;
-  uint32_t IC_Val2 = 0;
-  int n;
-  int vals;
+  uint8_t buff1[200];
 
-  Radio_t rad1;
   rad1.htim = &htim3;
-  rad1.tim_channel = TIM_CHANNEL_1;
+  rad1.tim_channel = TIM_CHANNEL_3;
+  rad1.radio_lower = 1000; //in microseconds
+  rad1.radio_upper = 2000; //in microseconds
+
+  rad2.htim = &htim3;
+  rad2.tim_channel = TIM_CHANNEL_4;
+  rad2.radio_lower = 1000; //in microseconds
+  rad2.radio_upper = 2000; //in microseconds
+
+
 
   Motor_t motor1;
 
@@ -91,6 +100,16 @@ int main(void)
 
   motor1.IN1_pin = TIM_CHANNEL_1;
   motor1.IN2_pin = TIM_CHANNEL_2;
+
+  Motor_t motor2;
+
+  motor2.htim = &htim4;
+
+  motor2.EN_GPIO = GPIOA;
+  motor2.EN_pin = GPIO_PIN_1;
+
+  motor2.IN1_pin = TIM_CHANNEL_3;
+  motor2.IN2_pin = TIM_CHANNEL_4;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -112,70 +131,52 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_TIM4_Init();
-  MX_USART2_UART_Init();
   MX_TIM3_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
-  Read_Start(&rad1);
   enable(&motor1);
+  enable(&motor2);
+
+  Initialize_Vals(&rad1);
+  Initialize_Vals(&rad2);
+  HAL_TIM_IC_Start_IT(&htim3, TIM_CHANNEL_3);
+  HAL_TIM_IC_Start_IT(&htim3, TIM_CHANNEL_4);
+  uint32_t transmit_period = 500;
+  uint32_t current_time = HAL_GetTick();
+  uint32_t next_time = current_time + transmit_period;
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   n = sprintf((char*)buff, "Start\r\n");
-  HAL_UART_Transmit(&huart2, buff, strlen((char*)buff), HAL_MAX_DELAY);
+  HAL_UART_Transmit(&huart1, buff, strlen((char*)buff), HAL_MAX_DELAY);
   while (1)
   {
 
-	  HAL_Delay(500);
+	  if(HAL_GetTick() > next_time){
 
-	  //n = sprintf((char*)buff, "Captured value 1: %d\r\n", IC_Val1);
-	  //HAL_UART_Transmit(&huart2, buff, strlen((char*)buff), HAL_MAX_DELAY);
-	  n = sprintf((char*)buff, "Pulse Width is: %d\r\n", rad1.frequency);
-	  HAL_UART_Transmit(&huart2, buff, strlen((char*)buff), HAL_MAX_DELAY);
+		  next_time = HAL_GetTick() + transmit_period;
 
-	  vals = ((1/rad1.frequency)*1000000 - 1.5)*65535/0.5;
+		  int32_t intr1 = (rad1.usWidth - 1500)*128;
+		  int32_t intr2 = (rad2.usWidth - 1500)*128;
 
-	  set_level(&motor1, vals);
+		  sprintf((char*)buff, "Channel 1 Pulse Width: %dus\r\n", rad1.usWidth);
+		  HAL_UART_Transmit(&huart1, buff, strlen((char*)buff), HAL_MAX_DELAY);
+		  sprintf((char*)buff1, "Channel 2 Pulse Width: %dus\r\n", rad2.usWidth);
+		  HAL_UART_Transmit(&huart1, buff1, strlen((char*)buff1), HAL_MAX_DELAY);
+
+
+		  set_level(&motor2, intr1);
+		  set_level(&motor1, intr2);
+
+	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
 
-
-  void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
-  	if (htim->Instance == TIM3)
-  	{
-  		if (rad1.Is_First_Captured==0) // if the first rising edge is not captured
-  		{
-  			rad1.IC_Val1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1); // read the first value
-  			rad1.Is_First_Captured = 1;  // set the first captured as true
-  		}
-
-  		else   // If the first rising edge is captured, now we will capture the second edge
-  		{
-  			rad1.IC_Val2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);  // read second value
-
-  			if (rad1.IC_Val2 > rad1.IC_Val1)
-  			{
-  				rad1.Difference = rad1.IC_Val2-rad1.IC_Val1;
-  			}
-
-  			else if (rad1.IC_Val1 > rad1.IC_Val2)
-  			{
-  				rad1.Difference = (0xffffffff - rad1.IC_Val1) + rad1.IC_Val2;
-  			}
-
-  			float refClock = 96*10^6/(rad1.htim->Init.Prescaler);
-
-  			rad1.frequency = refClock/rad1.Difference;
-
-  			__HAL_TIM_SET_COUNTER(htim, 0);  // reset the counter
-  			rad1.Is_First_Captured = 0; // set it back to false
-  		}
-  	}
-  }
   /* USER CODE END 3 */
 }
 
@@ -231,6 +232,7 @@ void SystemClock_Config(void)
   */
 static void MX_TIM3_Init(void)
 {
+
   /* USER CODE BEGIN TIM3_Init 0 */
 
   /* USER CODE END TIM3_Init 0 */
@@ -242,7 +244,7 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 95;
+  htim3.Init.Prescaler = 96-1;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim3.Init.Period = 65535;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -261,11 +263,11 @@ static void MX_TIM3_Init(void)
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
   sConfigIC.ICFilter = 0;
-  if (HAL_TIM_IC_ConfigChannel(&htim3, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
+  if (HAL_TIM_IC_ConfigChannel(&htim3, &sConfigIC, TIM_CHANNEL_3) != HAL_OK)
   {
     Error_Handler();
   }
-  if (HAL_TIM_IC_ConfigChannel(&htim3, &sConfigIC, TIM_CHANNEL_2) != HAL_OK)
+  if (HAL_TIM_IC_ConfigChannel(&htim3, &sConfigIC, TIM_CHANNEL_4) != HAL_OK)
   {
     Error_Handler();
   }
@@ -337,35 +339,35 @@ static void MX_TIM4_Init(void)
 }
 
 /**
-  * @brief USART2 Initialization Function
+  * @brief USART1 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_USART2_UART_Init(void)
+static void MX_USART1_UART_Init(void)
 {
 
-  /* USER CODE BEGIN USART2_Init 0 */
+  /* USER CODE BEGIN USART1_Init 0 */
 
-  /* USER CODE END USART2_Init 0 */
+  /* USER CODE END USART1_Init 0 */
 
-  /* USER CODE BEGIN USART2_Init 1 */
+  /* USER CODE BEGIN USART1_Init 1 */
 
-  /* USER CODE END USART2_Init 1 */
-  huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits = UART_STOPBITS_1;
-  huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USART2_Init 2 */
+  /* USER CODE BEGIN USART1_Init 2 */
 
-  /* USER CODE END USART2_Init 2 */
+  /* USER CODE END USART1_Init 2 */
 
 }
 
@@ -396,6 +398,77 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
+
+      	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3)
+      	{
+      		if (rad1.Is_First_Captured==0) // if the first rising edge is not captured
+      		{
+      			rad1.IC_Val1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3); // read the first value
+      			rad1.Is_First_Captured = 1;  // set the first captured as true
+      		}
+
+      		else   // If the first rising edge is captured, now we will capture the second edge
+      		{
+      			rad1.IC_Val2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3);  // read second value
+
+      			if (rad1.IC_Val2 > rad1.IC_Val1)
+      			{
+      				rad1.Difference = rad1.IC_Val2-rad1.IC_Val1;
+      			}
+
+      			else if (rad1.IC_Val1 > rad1.IC_Val2)
+      			{
+      				rad1.Difference = (65535 - rad1.IC_Val1) + rad1.IC_Val2;
+      			}
+
+      			float refClock = 96*1000000/(rad1.htim->Init.Prescaler);
+
+      			int temp_wid = rad1.Difference*1000000/refClock;
+
+      			if (temp_wid > rad1.radio_lower*0.9 && temp_wid < rad1.radio_upper*1.1){
+      			      	rad1.usWidth = temp_wid;
+      			}
+      			//__HAL_TIM_SET_COUNTER(htim, 0);  // reset the counter
+      			rad1.Is_First_Captured = 0; // set it back to false
+      		}
+      	}
+      	else
+      	{
+      		if (rad2.Is_First_Captured==0) // if the first rising edge is not captured
+      		{
+      			rad2.IC_Val1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_4); // read the first value
+      			rad2.Is_First_Captured = 1;// set the first captured as true
+      		}
+
+      		else   // If the first rising edge is captured, now we will capture the second edge
+      		{
+      			rad2.IC_Val2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_4);  // read second value
+
+      			if (rad2.IC_Val2 > rad2.IC_Val1)
+      			{
+      				rad2.Difference = rad2.IC_Val2-rad2.IC_Val1;
+      			}
+
+      			else if (rad2.IC_Val1 > rad2.IC_Val2)
+      			{
+      				rad2.Difference = (65535 - rad2.IC_Val1) + rad2.IC_Val2;
+      			}
+
+      			float refClock = 96*1000000/(rad2.htim->Init.Prescaler);
+
+      			int temp_wid = rad2.Difference*1000000/refClock;
+
+      			if (temp_wid > rad2.radio_lower*0.9 && temp_wid < rad2.radio_upper*1.1){
+      				rad2.usWidth = temp_wid;
+      			}
+      			rad2.Is_First_Captured = 0;
+      		}
+
+      			//__HAL_TIM_SET_COUNTER(htim, 0);  // reset the counter
+      			 // set it back to false
+      	}
+      }
 
 /* USER CODE END 4 */
 
