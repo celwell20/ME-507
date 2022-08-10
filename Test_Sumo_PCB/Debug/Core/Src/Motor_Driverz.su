@@ -1,0 +1,3 @@
+../Core/Src/Motor_Driverz.c:12:6:enable	16	static
+../Core/Src/Motor_Driverz.c:17:6:disable	16	static
+../Core/Src/Motor_Driverz.c:23:6:set_level	16	static
