@@ -26,10 +26,10 @@ void automatic(auto_sumo_t* bot){
 
 void move_across(auto_sumo_t* bot){
 
-	set_level(&bot->lb_motor, 4999);
-	set_level(&bot->lf_motor, 4999);
-	set_level(&bot->rb_motor, 4999);
-	set_level(&bot->rf_motor, 4999);
+	set_level(&bot->lb_motor, 1999);
+	set_level(&bot->lf_motor, 1999);
+	set_level(&bot->rb_motor, 1999);
+	set_level(&bot->rf_motor, 1999);
 	if(HAL_GetTick() > bot->next_time){
 
 		bot->state = 1;
@@ -40,10 +40,10 @@ void move_across(auto_sumo_t* bot){
 
 void turn_at_edge(auto_sumo_t* bot){
 
-	set_level(&bot->lb_motor, -4999);
-	set_level(&bot->lf_motor, -4999);
-	set_level(&bot->rb_motor, 4999);
-	set_level(&bot->rf_motor, 4999);
+	set_level(&bot->lb_motor, -1999);
+	set_level(&bot->lf_motor, -1999);
+	set_level(&bot->rb_motor, 1999);
+	set_level(&bot->rf_motor, 1999);
 	if(HAL_GetTick() > bot->next_time){
 
 		bot->state = 0;

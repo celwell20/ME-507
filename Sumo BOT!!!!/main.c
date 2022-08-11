@@ -25,6 +25,8 @@
 #include "Motor_Driverz.h"
 #include "Radio_Receiver.h"
 #include "Auto_Sumo.h"
+#include "Magneto.h"
+#include "Sumo_Data.h"
 
 /* USER CODE END Includes */
 
@@ -45,11 +47,14 @@
 /* Private variables ---------------------------------------------------------*/
  ADC_HandleTypeDef hadc1;
 
+I2C_HandleTypeDef hi2c1;
+
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
 
 UART_HandleTypeDef huart1;
+ADC_ChannelConfTypeDef sConfig = {0};
 
 /* USER CODE BEGIN PV */
 Radio_t rad1;
@@ -66,6 +71,7 @@ static void MX_USART1_UART_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -82,14 +88,17 @@ static void MX_TIM3_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+	HAL_StatusTypeDef ret;
 	uint8_t buff[24];
+	uint8_t buffy[6];
 	Motor_t lb;
 	Motor_t rf;
 	Motor_t rb;
 	Motor_t lf;
 	auto_sumo_t bot;
-
 	uint32_t next_time;
+	Magnet_t mag;
+	sumo_data_t data;
 
   /* USER CODE END 1 */
 
@@ -116,6 +125,7 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM4_Init();
   MX_TIM3_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   rf.IN_pin = TIM_CHANNEL_1;
   rf.htim = &htim1;
@@ -163,10 +173,29 @@ int main(void)
   rad2.radio_lower = 1000; //in microseconds
   rad2.radio_upper = 2000; //in microseconds
 
+  mag.Data_Start = 0x00;
+  mag.dev_add = 0x1A;
+  mag.set = 0x0B;
+  mag.mode = 0x09;
+  mag.check = 0x06;
+  mag.calb[0] = 0x01;
+  mag.calb[1] = 0x1D;
+
+  data.mag = mag;
+  data.adc = &hadc1;
+  data.mot = lb;
+  data.sConfig = &sConfig;
+  data.volt_chan = ADC_CHANNEL_0;
+  data.curr1_chan = ADC_CHANNEL_1;
+  data.curr2_chan = ADC_CHANNEL_2;
+  data.ref1_chan = ADC_CHANNEL_3;
+  data.ref2_chan = ADC_CHANNEL_4;
+
   bot.lb_motor = lb;
   bot.lf_motor = lf;
   bot.rb_motor = rb;
   bot.rf_motor = rf;
+  bot.dat = data;
 
   Initialize_Vals(&rad1);
   Initialize_Vals(&rad2);
@@ -177,12 +206,13 @@ int main(void)
   enable(&rf);
   enable(&rb);
   enable(&lf);
+  initialize(&bot);
+  initialize_mode(&mag);
+  init_data(&data);
 
 
   uint8_t cont_press = 0;
   uint32_t count = 0;
-
-
 
 
   /* USER CODE END 2 */
@@ -191,13 +221,11 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  //if (vol < 3005){
-	  //   disable(&lb);
-	  //}
 
 	  if(auto_mode){
 		  if(rad2.usWidth < 1850){
 
+			  run_data(&data);
 			  automatic(&bot);
 
 			  cont_press = 0;
@@ -400,6 +428,40 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 100000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
 
 }
 

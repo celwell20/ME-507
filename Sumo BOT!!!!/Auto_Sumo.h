@@ -10,6 +10,8 @@
 
 #include "main.h"
 #include "Motor_Driverz.h"
+#include "Magneto.h"
+#include "Sumo_Data.h"
 
 typedef struct auto_sumo{
 
@@ -19,6 +21,8 @@ typedef struct auto_sumo{
 	Motor_t rf_motor;
 	int32_t state;
 	int32_t next_time;
+	Magnet_t mag;
+	sumo_data_t dat;
 
 
 } auto_sumo_t;
